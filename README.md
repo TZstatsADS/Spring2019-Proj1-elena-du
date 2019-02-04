@@ -9,10 +9,10 @@ This is the first and only *individual* (as opposed to *team*) this semester.
 
 Term: Spring 2019
 
-+ Projec title: Lorem ipsum dolor sit amet
-+ This project is conducted by [your name]
++ Project title: What makes people garrulous about their happiness?
++ This project is conducted by Elena Dubova
 
-+ Project summary: [a short summary] Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
++ Project summary: Happy DB is a huge collection of happy moments by different people all over the world. While the natural first thing to learn about the database is common features and popular topics, I am yet more curious about differences. Happiness is such an abstract notion, so the variability of perceptions is a rich field to explore. In this particlular project I ask a question: what fuels people to say more about their happy moments and go far beyond a standard sentence in description. There is almost a thousand observations over 5 sentences, one description contains as many as 69 sentences! The project consists of two major parts. Firstly, I do exploratory data analysis of demographic data using the length of descriptions as a variable in question. Secondly, I apply text mining techniques to shed light on topics by garrulous and taciturn people.
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
