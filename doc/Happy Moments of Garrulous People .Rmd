@@ -310,12 +310,16 @@ Interesting insights about short descriptions come from Pakistan. Some of them a
 
 ### Summary.
 
+The goal of this analysis was to shed light on what makes people be verbose on describing their happy moments, how they are different form the rest of the crowd and whether the topics they address are different. 
 
+The collective image of a garrulous person as it can be implied from the analysis in the following. It is an individual in his/her 20s and 40s (no dramatic difference in gender), married, yet, with no kids. Best countries to look for verbose writers are Ukraine and Pakistan. Happy Ukrainians are politically engaged, social and concentrated on their work, Pakistanis people, on the other hand, can produce long essays with spiritual flavor. "Home" and "family" may be a better indication of verbosity, concise statements tend to be a feature of outgoing people. 
+
+There is some indication of verbose writers to using more abstract notions versus more actual notions based on LDA analysis. This claim may be also supported by distribution of long verbatims by "predicted category" that was included in the initial dataset: few people write long contributions about such concrete category as "exercise"; "affection" is the most popular category among longest descriptions.
 
 ###Reference
 
-1. Andy South. rworldmap: A New R package for Mapping Global Data. https://journal.r-project.org/archive/2011-1/RJournal_2011-1_South.pdf 
-2. Julia Silge, David Robinson. Text Mining with R. 2018. https://www.tidytextmining.com 
-3. Text Mining Tutorial. https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+1. Julia Silge, David Robinson. Text Mining with R. 2018. https://www.tidytextmining.com 
+2. Text Mining Tutorial. https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+3. Andy South. rworldmap: A New R package for Mapping Global Data. https://journal.r-project.org/archive/2011-1/RJournal_2011-1_South.pdf 
 4. Wikipedia, http://www.abhai.org.in, https://www.urbandictionary.com/define.php?term=labtop for words interpretation.  
 
