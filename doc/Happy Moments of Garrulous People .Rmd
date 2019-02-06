@@ -167,7 +167,7 @@ Most popular topic for long essays has something to do with affection in the fir
 
 ##Unsupervised: LDA
 
-Latent Dirichlet allocation helps to find a combination of words that is associated with a given number of topics. It is unsupervised method based on number of topics chosen by the requestor. 
+Latent Dirichlet allocation helps to find a combination of words that is associated with a given number of topics. It is unsupervised method based on number of topics chosen by the requestor. In this analysis I treat a collection of "happy_moments" by verbosity as a document that contains a number of topics in order to see how the different topics are. 
 
 ```{r}
 
@@ -175,11 +175,13 @@ garrulous = text %>%
   filter(num_sentence >5) %>%
   select(cleaned_hm)  
 
-top_terms_by_topic_LDA(garrulous, plot = T, number_of_topics = 4)
+top_terms_by_topic_LDA(garrulous, plot = T, number_of_topics = 2)
 
 ```
 
-Looking at four topics by garrulous people, some stories come distinguishable: (1) parent-child experiences, (2) social interactions; (3) outdoors activities; (4) intellectual satisfactions. 
+It is pretty hard to compose a story from the output as "topics" are filtered by the only factor - verbosity; a lot of separate inputs are fed into the model, so those representations are collective images. 
+
+It is noticable that a generic word "life" has the highest scores. According to the output, people write long verbatimes about spending time with their family and friends as they come back home and about starting new things and socializing during the day.  
 
 ```{r}
 
@@ -187,149 +189,133 @@ taciturn = text %>%
   filter(num_sentence <3) %>%
   select(cleaned_hm)  
 
-top_terms_by_topic_LDA(taciturn, plot = T, number_of_topics = 4)
+top_terms_by_topic_LDA(taciturn, plot = T, number_of_topics = 2)
 
 ```
 
-Looking at less verbose descriptions, different topics can be summarized: (1) social interactions; (2) social activities; (3) free time with colleagues; (4) nature-related experiences.
+People, who wrote concise descriptions of their "happy moments" seem to be more to the point: highest scores are awarded to more informative notions, such as "morning", "work", "girlfriend" and "friend". First collective image of happiness describes more concrete activities, such as "ate", "won", "met" and well-defined notions, such as "food" and "video". Second one is a composition of both family- and work-related socialization experiences.
 
-Of cause, those topic summaries are somewhat loose interpretations. There are overlaps; on the other hand, in the first case, it is easier to come up with generalizations and they are more concrete.  
+It can be concluded that it doesn't matter how long an essay is - overlap in topics is pretty significant. Both subsets contain indication of social roles, times of the day and food-related experiences. The only difference is taciturn people operate more utilitarian vocabulary. Moreover, "Work" and "Job" is present only in concise statements. 
+
+It is also interesting to compare distribution of beta-values common words in two categories in question.
+
+```{r}
+
+garrulous_LDA = top_terms_by_topic_LDA(garrulous, plot = F, number_of_topics = 2)
+taciturn_LDA = top_terms_by_topic_LDA(taciturn, plot = F, number_of_topics = 2)
+
+garrulous_LDA = garrulous_LDA %>%
+  mutate(verbosity = "garrulous")
+taciturn_LDA = taciturn_LDA %>%
+  mutate(verbosity = "taciturn")
+
+LDA_merged = rbind(garrulous_LDA, taciturn_LDA)
+
+LDA_merged %>%
+  filter(term %in% c("friends", "family", "home")) %>%
+  select(term, beta, verbosity) %>%
+  group_by(term) %>%
+  arrange(-beta) %>%
+  ggplot(aes(x = term, y = beta, fill = verbosity)) + geom_col(position ="dodge") + theme(axis.text=element_text(size=10))
+
+```
+
+According to the model, "family" and "home" gain bigger weight in terms of toic concentration among verbose people; and "friends" are scored higher among those, who describe their "happy moments" in fewer words. This is not an extreme dichotomy, by implies that outgoing people tend to write shorter essays than people focused on family issues. 
 
 ## Supervised: topic modeling with TF-IDF
 
-Term Frequency - Inverse Document Frequency method allows to analyze a text in a smart way, as it decreases the weight for commonly used words and increases the weight for words that are not used very much across observations. 
+Term Frequency - Inverse Document Frequency method allows to analyze a text in a smart way, as it decreases the weight for commonly used words and increases the weight for words that are not used very much across observations (Silge, 2018). Advantage of looking into the data with this technique is ability to use labels. As cultural differences might be very distinguisable in the essays, we can furhter look into "by country" splits for garrulous and taciturn people. 
 
-Different basis of comparison can be looked into.
+This part of the analysis focus on four countries: 
+- USA and India (as they are richly respresented in the data)
+- Ukraine and Pakistan (as they represent most garrulous samples of essays)
 
 ```{r}
-garrulous = text %>%
+
+text_demog = left_join(text, demog, by = 'wid')
+verbat = text_demog %>%
+  select(cleaned_hm) 
+corpus = getCorpus(verbat)
+verbat_processed = data.frame(text=sapply(corpus, `[[`, "content"), stringsAsFactors=FALSE)
+text_demog = cbind(text_demog, verbat_processed)
+
+garrulous = text_demog %>%
+  filter(country %in% c("USA", "IND", "PAK", "UKR")) %>%
   filter(num_sentence >5) %>%
-  select(c(cleaned_hm, predicted_category, num_sentence, reflection_period))%>%
+  select(c(X1, country))
 
-taciturn = text %>%
+taciturn = text_demog %>%
+  filter(country %in% c("USA", "IND", "PAK", "UKR")) %>%
   filter(num_sentence <3) %>%
-  select(c(cleaned_hm, predicted_category, num_sentence, reflection_period))
-```
-
-(1) reflection period
-
-```{r}
-
-top_terms_by_topic_tfidf(text_df = garrulous,
-                         text_column = cleaned_hm, 
-                         group_column = reflection_period, 
-                         plot = T) 
+  select(c(X1, country))
 
 ```
 
-```{r}
+Using pre-defined function, complosing two dataframes with tf-idf scores.
 
-top_terms_by_topic_tfidf(text_df = taciturn,
-                         text_column = cleaned_hm, 
-                         group_column = reflection_period, 
-                         plot = T) 
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+garrulous_tfidf = top_terms_by_topic_tfidf(text_df = garrulous, 
+                         text_column = X1,
+                         group_column = country, 
+                         plot = F) 
 
+taciturn_tfidf = top_terms_by_topic_tfidf(text_df = taciturn, 
+                         text_column = X1,
+                         group_column = country, 
+                         plot = F) 
 ```
 
-(2) predicted_category
+Plotting the results.
 
 ```{r}
-top_terms_by_topic_tfidf(text_df = garrulous, 
-                         text_column = cleaned_hm, 
-                         group_column = predicted_category,
-                         plot = T) 
 
-```
-
-```{r}
-top_terms_by_topic_tfidf(text_df = taciturn, 
-                         text_column = cleaned_hm, 
-                         group_column = predicted_category,
-                         plot = T) 
-
-```
-
-## Draft
-(3) 
-```{r}
-data_cat = mutate(data_cat, length_bin = cut(as.numeric(num_sentence), breaks = c(0,5,10,15,20,Inf), labels = c(">5", "5-9", "10-14", "15-19", "20>")))
-top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
-                         text_column = cleaned_hm, # column with text
-                         group_column = length_bin, # column with topic label
-                         plot = T) # return a plot
-
-data_cat = left_join(data_cat, demog, by = 'wid')
-
-top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
-                         text_column = cleaned_hm, # column with text
-                         group_column = gender, # column with topic label
-                         plot = T) # return a plot
-
-top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
-                         text_column = cleaned_hm, # column with text
-                         group_column = marital, # column with topic label
-                         plot = T) # return a plot
-
-top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
-                         text_column = cleaned_hm, # column with text
-                         group_column = parenthood, # column with topic label
-                         plot = T) # return a plot
-
-data_cat_long = filter(data_cat, num_sentence >5)
-
-top_terms_by_topic_tfidf(text_df = data_cat_long, # dataframe
-                         text_column = cleaned_hm, # column with text
-                         group_column = country, # column with topic label
-                         plot = T) # return a plot
-
-# get just the tf-idf output for the hotel topics
-happy_tfidf_bycountry <- top_terms_by_topic_tfidf(text_df = data_cat_long, 
-                                                  text_column = cleaned_hm, 
-                                                  group = country, 
-                                                  plot = F)
-
-# do our own plotting
-happy_tfidf_bycountry  %>% 
+garrulous_tfidf  %>% 
   group_by(country) %>% 
   top_n(5) %>% 
   ungroup %>%
   ggplot(aes(word, tf_idf, fill = country)) +
-  geom_col(show.legend = FALSE) +
-  labs(x = NULL, y = "tf-idf") +
-  facet_wrap(~country, ncol = 4, scales = "free", ) +
-  coord_flip()
+  geom_col(show.legend = F) +
+  labs(x = NULL, y = "TF-IDF") +
+  facet_wrap(~country, ncol = 4, scales = "free") +
+  coord_flip() + 
+  theme(axis.text=element_text(size=8)) +
+  scale_fill_manual(values=c("#CC6666", "#9999CC", "#66CC99", "#CCCC33"))
 
-#####
-x = select(data_cat_long, cleaned_hm)
-x = unlist(x)
-corpus = getCorpus(x)
+```
+India and USA are very similar as people write long texts about friends and family, life in general. Interestingly, "roti" is among most descriptive words in the USA group. This word might carry a meaning of a round flatbread in Indian culture, so it can be assumed that a fair portion of people identifying their country as "USA" might be Indian by origin. 
 
-y = data.frame(text=sapply(corpus, `[[`, "content"), stringsAsFactors=FALSE)
+In case of Pakistan words in the output refer to very specific spiritual notions, such as "abhai" (can mean "no fear" or be the name of spiritual organization), "hari" (name of a sacred text). 
 
-data_cat_long_clean = cbind(data_cat_long, y)
+Ukrainian authors of verbose essays are very specific in describing their happy moment. Top words hint towards political topic (situation between Russia and Ukraine), social networking ("vkontakte" is a large social network in Russian-speaking community), work-related happy moments. Language is involved and specific.
 
+```{r}
 
-happy_tfidf_bycountry_clean <- top_terms_by_topic_tfidf(text_df = data_cat_long_clean, 
-                                                  text_column = X1, 
-                                                  group = country, 
-                                                  plot = F)
-
-# do our own plotting
-happy_tfidf_bycountry_clean  %>% 
+taciturn_tfidf  %>% 
   group_by(country) %>% 
   top_n(5) %>% 
   ungroup %>%
   ggplot(aes(word, tf_idf, fill = country)) +
-  geom_col(show.legend = FALSE) +
-  labs(x = NULL, y = "tf-idf") +
-  facet_wrap(~country, ncol = 4, scales = "free", ) +
-  coord_flip()
+  geom_col(show.legend = F) +
+  labs(x = NULL, y = "TF-IDF") +
+  facet_wrap(~country, ncol = 4, scales = "free") +
+  coord_flip() + 
+  theme(axis.text=element_text(size=8)) +
+  scale_fill_manual(values=c("#CC6666", "#9999CC", "#66CC99"))
+
 ```
+
+Looking at the subset of short descriptions of happy moments, first thing to notice is that people in Ukraine do not write short descriptions, all their stories are over 2 sentences. American and Indian essays again show a fair share of similarity. Those are pretty general words, some of them are common ("son"). Some specific notions appear in contrast to verbose descriptions ("movie", "game", "temple").
+
+Interesting insights about short descriptions come from Pakistan. Some of them are actually misspellings. For example, "labtop" is a common misspelling for "laptop". Another thing, spirituality goes away; concrete and practical notions prevail.   
+
+### Summary.
 
 
 
 ###Reference
 
 1. Andy South. rworldmap: A New R package for Mapping Global Data. https://journal.r-project.org/archive/2011-1/RJournal_2011-1_South.pdf 
-2. https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+2. Julia Silge, David Robinson. Text Mining with R. 2018. https://www.tidytextmining.com 
+3. Text Mining Tutorial. https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+4. Wikipedia, http://www.abhai.org.in, https://www.urbandictionary.com/define.php?term=labtop for words interpretation.  
 
