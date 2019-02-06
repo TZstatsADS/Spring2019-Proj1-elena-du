@@ -1,0 +1,335 @@
+---
+title: "What makes people garrulous about their happiness?"
+output: html_notebook
+---
+
+### Introduction. When happy moments speak?
+
+The database HappyDB (https://rit-public.github.io/HappyDB) contains over 100,000 crowd-sourced happy moments. Participants are asked to write one or more complete sentences on what made them happy in past 24 hours or 3 months. What drew my attention is that even though absolute majority come up with one sentence per happy moment, there are almost a thousand of happy moments over 5 sentences. The longest one consists of 69 sentences! There is a famous saying by Seneca "Curae leves loquuntur ingentes stupent" ("Slight griefs talk, great ones are speechless"). So, I wonder if there is also some interesting correlation between length of a "happy moment pitch" and its properties. Who are those people who write extensive essays, how they are different from people who prefer to get away with few sentences? What are the topics that encourage more talk?
+
+The body of the analysis consists of two main parts: statistical analysis using demographic data and text mining (topic modeling).  
+
+### Libraries and Data
+
+Loading the libraries to be used for data manipulation, text mining and visualization.
+
+```{r libraries, echo = FALSE, warning=FALSE, message=FALSE}
+
+library(data.table)
+library(DT)
+library(dplyr)
+
+library(tm)
+library(tidyverse) 
+library(tidytext) 
+library(topicmodels) 
+library(SnowballC) 
+library(classInt)
+
+library(ggplot2)
+library(cowplot)
+library(beeswarm)
+library(rworldmap)
+library(RColorBrewer)
+
+```
+
+Reading data from on-line location.
+
+```{r data, warning=FALSE, message=FALSE}
+
+text = read_csv('https://raw.githubusercontent.com/rit-public/HappyDB/master/happydb/data/cleaned_hm.csv')
+demog = read_csv('https://raw.githubusercontent.com/rit-public/HappyDB/master/happydb/data/demographic.csv')
+
+```
+
+Getting a look of data.
+
+```{r}
+
+summary(text)
+```
+
+As we see from the data above, the distribution of number of sentences is very skewed, and this is the long tail I'll be interested in.   
+
+```{r}
+ggplot(text, aes(x = num_sentence)) + geom_histogram(bins = 30)
+```
+
+Cleaning demographic dataframe.
+
+```{r}
+
+summary(demog)
+
+```
+
+As demographic data is essential for first part of the analysis, it needs some cleaning. I change "age" to numeric variable, as I bin by age in the analysis. I substitute erroneous inputs using "educated guess" logic and averaging - whatever is more appropriate in every case. I also convert "character" type to "factor" to see the skewness of the distribution. 
+
+```{r warning=FALSE, message=FALSE}
+
+demog$age = as.numeric(demog$age) 
+demog = na.omit(demog)
+
+demog %>%
+  filter(age > 100 | age < 10) 
+
+demog$age[demog$wid == "532"] = 23
+demog$age[demog$wid == "1986"] = 27
+demog$age[demog$wid %in% c("62", "2369", "2901", "3554", "12446")] = round(mean(demog$age), 0)
+
+cols = c("country", "gender", "marital", "parenthood")
+demog[cols] = lapply(demog[cols], factor)
+
+summary(demog)
+
+```
+
+While "age", "country", "gender", "marital" and, "parenthood" look pretty balanced in the dataset, "country" is seriously biased in favor of USA.
+
+### Part I. Exploratory Data Analysis on Demographic Data.  
+
+As a person is a unit of the analysis, it makes sense to average lengths of all "happy moments" by person. This statistic - mean number of sentences per person - is the variable in question. Binning is performed for age for clarity of visualizations.
+
+```{r}
+
+text = data.table(text)
+avg_len = text[, .(avg_sent_length = round(mean(num_sentence), 0)), by = wid]
+demog = left_join(demog, avg_len, by = 'wid')
+demog = na.omit(demog)
+demog = mutate(demog, age_bin = cut(age, breaks = c(0,20,30,40,50,Inf), labels = c(">20", "21-30", "31-40", "41-50", "50>")))
+summary(demog)
+
+```
+
+Let's consider intrinsic qualities as possible triggers for garrulous writing behavior, when it comes to happiness. 
+
+```{r}
+demog %>%
+  filter(avg_sent_length >5) %>%
+  ggplot(aes(x = age_bin, y = avg_sent_length, col = gender)) + geom_boxplot() + scale_y_log10() + xlab("Age") + ylab("# Sentences") + ggtitle("Garrelous people: Intrinsic Qualities")
+
+```
+
+Some interesting patterns are revealed. People are eager to tell more in their 20s and 40s, but they are less talkative about their happiness in between (I would not use "concise" as there all of them produced over 5 sentences in average). This is true for males and females, however, change for women seem more extreme.  I'm a little cautious to make conclusions about people below 20 and above 50 years old as sample is not well balanced, but general "ups and downs" pattern is clearly seen. If I'm looking for people motivated to write a long essay about their happy moments, my best candidate will likely be a female in her 40s or I can have some luck with people on their 20s.   
+
+Now it is worthwhile to check extrinsic predictors. Due to insufficient representation of all marital status categories, the boxplot below is limited to major categories: "married" and "single". 
+
+```{r}
+demog %>%
+  filter(avg_sent_length >5 & marital %in% c("married","single")) %>%
+  ggplot(aes(x = marital, y = avg_sent_length, col = parenthood)) + geom_boxplot() + scale_y_log10() + xlab("Marital Status") + ylab("# Sentences") + ggtitle("Garrelous people: Extrinsic Qualities")
+
+```
+
+When it comes to family, married people with no kids can write an essay about their happiness. As kids join the family, chances are parents will cut their "happy stories". Interestingly, median for married writers with kids and single writers with or without kids opting for over 5 sentences is the same.
+
+Final extrinsic feature to explore is "country". Even though USA is by far most frequent choice, and the representation is uneven, map view might be unformative as I'm interested in extremes. 
+
+```{r map data, , warning=FALSE, message=FALSE}
+
+demog_ISO3 = demog %>% 
+  select(country, avg_sent_length) %>%
+  group_by(country) %>%
+  summarize(mean_len = mean(avg_sent_length), na.rm = T)
+
+colourPalette = brewer.pal(8,'Oranges')
+classInt = classIntervals( sPDF[["mean_len"]] ,n=8, style = "jenks")
+catMethod = classInt[["brks"]]
+
+sPDF = joinCountryData2Map(demog_ISO3, joinCode = "ISO3", nameJoinColumn = "country", mapResolution = "coarse")
+
+mapCountryData(sPDF,
+               nameColumnToPlot='mean_len', 
+               mapTitle = "Number of Happy Sentances (average)", 
+               numCats = 8, 
+               catMethod = catMethod,
+               colourPalette = colourPalette)
+
+```
+
+Verbose people live in Ukraine, Pakistan. There are a couple of bright spots to notice: Bangladesh, Nepal and Costa Rica. 
+
+Before diving into text mining, I'd like to make use of category predictions present in the "text" dataset with regards to sentence number. In this analysis I continue looking at extreme  cases, i.e. those who writes a lot (6 sentences and more).
+
+```{r}
+
+garrulous = text %>%
+  filter(num_sentence >5)
+
+plot1 = beeswarm(num_sentence ~ predicted_category, data = garrulous, log=T, vertical = T, pch = 16, col = rainbow(8), method = 'hex', corral = "gutter", xlab = "Predicted Topic", ylab = "Number of Sentences", labels = c("Achieve", "Affect", "Bond", "Moment", "Exercise", "Leisure", "Nature"), main = "Garrelous people are happy about:")
+
+```
+
+Most popular topic for long essays has something to do with affection in the first place. Then come describing a moment, achievement or bonding. There are no particularly verbose descriptions on exercise-related "happy moments"; few are about leisure. It might be that describing more abstract categories, such as feelings requires more text than more concrete topics, such as "exercise". 
+
+### Part II. Text mining.
+
+##Unsupervised: LDA
+
+Latent Dirichlet allocation helps to find a combination of words that is associated with a given number of topics. It is unsupervised method based on number of topics chosen by the requestor. 
+
+```{r}
+
+garrulous = text %>%
+  filter(num_sentence >5) %>%
+  select(cleaned_hm)  
+
+top_terms_by_topic_LDA(garrulous, plot = T, number_of_topics = 4)
+
+```
+
+Looking at four topics by garrulous people, some stories come distinguishable: (1) parent-child experiences, (2) social interactions; (3) outdoors activities; (4) intellectual satisfactions. 
+
+```{r}
+
+taciturn = text %>%
+  filter(num_sentence <3) %>%
+  select(cleaned_hm)  
+
+top_terms_by_topic_LDA(taciturn, plot = T, number_of_topics = 4)
+
+```
+
+Looking at less verbose descriptions, different topics can be summarized: (1) social interactions; (2) social activities; (3) free time with colleagues; (4) nature-related experiences.
+
+Of cause, those topic summaries are somewhat loose interpretations. There are overlaps; on the other hand, in the first case, it is easier to come up with generalizations and they are more concrete.  
+
+## Supervised: topic modeling with TF-IDF
+
+Term Frequency - Inverse Document Frequency method allows to analyze a text in a smart way, as it decreases the weight for commonly used words and increases the weight for words that are not used very much across observations. 
+
+Different basis of comparison can be looked into.
+
+```{r}
+garrulous = text %>%
+  filter(num_sentence >5) %>%
+  select(c(cleaned_hm, predicted_category, num_sentence, reflection_period))%>%
+
+taciturn = text %>%
+  filter(num_sentence <3) %>%
+  select(c(cleaned_hm, predicted_category, num_sentence, reflection_period))
+```
+
+(1) reflection period
+
+```{r}
+
+top_terms_by_topic_tfidf(text_df = garrulous,
+                         text_column = cleaned_hm, 
+                         group_column = reflection_period, 
+                         plot = T) 
+
+```
+
+```{r}
+
+top_terms_by_topic_tfidf(text_df = taciturn,
+                         text_column = cleaned_hm, 
+                         group_column = reflection_period, 
+                         plot = T) 
+
+```
+
+(2) predicted_category
+
+```{r}
+top_terms_by_topic_tfidf(text_df = garrulous, 
+                         text_column = cleaned_hm, 
+                         group_column = predicted_category,
+                         plot = T) 
+
+```
+
+```{r}
+top_terms_by_topic_tfidf(text_df = taciturn, 
+                         text_column = cleaned_hm, 
+                         group_column = predicted_category,
+                         plot = T) 
+
+```
+
+## Draft
+(3) 
+```{r}
+data_cat = mutate(data_cat, length_bin = cut(as.numeric(num_sentence), breaks = c(0,5,10,15,20,Inf), labels = c(">5", "5-9", "10-14", "15-19", "20>")))
+top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
+                         text_column = cleaned_hm, # column with text
+                         group_column = length_bin, # column with topic label
+                         plot = T) # return a plot
+
+data_cat = left_join(data_cat, demog, by = 'wid')
+
+top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
+                         text_column = cleaned_hm, # column with text
+                         group_column = gender, # column with topic label
+                         plot = T) # return a plot
+
+top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
+                         text_column = cleaned_hm, # column with text
+                         group_column = marital, # column with topic label
+                         plot = T) # return a plot
+
+top_terms_by_topic_tfidf(text_df = data_cat, # dataframe
+                         text_column = cleaned_hm, # column with text
+                         group_column = parenthood, # column with topic label
+                         plot = T) # return a plot
+
+data_cat_long = filter(data_cat, num_sentence >5)
+
+top_terms_by_topic_tfidf(text_df = data_cat_long, # dataframe
+                         text_column = cleaned_hm, # column with text
+                         group_column = country, # column with topic label
+                         plot = T) # return a plot
+
+# get just the tf-idf output for the hotel topics
+happy_tfidf_bycountry <- top_terms_by_topic_tfidf(text_df = data_cat_long, 
+                                                  text_column = cleaned_hm, 
+                                                  group = country, 
+                                                  plot = F)
+
+# do our own plotting
+happy_tfidf_bycountry  %>% 
+  group_by(country) %>% 
+  top_n(5) %>% 
+  ungroup %>%
+  ggplot(aes(word, tf_idf, fill = country)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~country, ncol = 4, scales = "free", ) +
+  coord_flip()
+
+#####
+x = select(data_cat_long, cleaned_hm)
+x = unlist(x)
+corpus = getCorpus(x)
+
+y = data.frame(text=sapply(corpus, `[[`, "content"), stringsAsFactors=FALSE)
+
+data_cat_long_clean = cbind(data_cat_long, y)
+
+
+happy_tfidf_bycountry_clean <- top_terms_by_topic_tfidf(text_df = data_cat_long_clean, 
+                                                  text_column = X1, 
+                                                  group = country, 
+                                                  plot = F)
+
+# do our own plotting
+happy_tfidf_bycountry_clean  %>% 
+  group_by(country) %>% 
+  top_n(5) %>% 
+  ungroup %>%
+  ggplot(aes(word, tf_idf, fill = country)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~country, ncol = 4, scales = "free", ) +
+  coord_flip()
+```
+
+
+
+###Reference
+
+1. Andy South. rworldmap: A New R package for Mapping Global Data. https://journal.r-project.org/archive/2011-1/RJournal_2011-1_South.pdf 
+2. https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+
